@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import logoAsset from "@/assets/logo.png.asset.json";
-import { getSettings, isLoggedIn, logout } from "@/lib/store";
+import { isLoggedIn, logout } from "@/lib/store";
 import { useAppData } from "@/lib/useAppData";
 
 const nav = [
@@ -31,7 +31,7 @@ export function AppLayout({ title, subtitle, children }: { title: string; subtit
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  useAppData();
+  const { settings: institute } = useAppData();
 
   useEffect(() => {
     if (!isLoggedIn()) navigate({ to: "/" });
@@ -43,8 +43,6 @@ export function AppLayout({ title, subtitle, children }: { title: string; subtit
   }, [pathname]);
 
   if (!ready) return <div className="min-h-screen bg-background" />;
-
-  const institute = getSettings();
 
  const sidebar = ( 
   <div className="flex h-full w-64 flex-col bg-navy text-navy-foreground"> 

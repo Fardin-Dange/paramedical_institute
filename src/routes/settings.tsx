@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { Btn, Card, Field, Input } from "@/components/ui-kit";
 import { useAppData } from "@/lib/useAppData";
-import { getSettings, saveSettings, type Settings } from "@/lib/store";
+import { saveSettingsFn } from "@/lib/settings";
+import { defaultSettings, type Settings } from "@/lib/store";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -18,13 +19,14 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
-  const { mounted } = useAppData();
-  const [f, setF] = useState<Settings>(getSettings());
+  const { mounted, settings, settingsError, refresh } = useAppData();
+  const [f, setF] = useState<Settings>(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (mounted) setF(getSettings());
-  }, [mounted]);
+    if (mounted) setF(settings);
+  }, [mounted, settings]);
 
   const set = (k: keyof Settings, v: string) => setF((p) => ({ ...p, [k]: v }));
 
@@ -33,11 +35,22 @@ function SettingsPage() {
       <Card className="max-w-2xl">
         <form
           className="space-y-4"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            saveSettings(f);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2500);
+            try {
+              setSaveError(null);
+              await saveSettingsFn({ data: f });
+              await refresh();
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2500);
+            } catch (error) {
+              console.error("Failed to save settings:", error);
+              setSaveError(
+                error instanceof Error
+                  ? error.message
+                  : "Failed to save settings.",
+              );
+            }
           }}
         >
           <Field label="Institute Name"><Input required value={f.instituteName} onChange={(e) => set("instituteName", e.target.value)} /></Field>
@@ -67,6 +80,11 @@ function SettingsPage() {
           <div className="flex items-center gap-3 pt-2">
             <Btn type="submit">Save Settings</Btn>
             {saved && <span className="text-sm text-[oklch(0.45_0.13_155)]">Settings saved.</span>}
+            {(settingsError || saveError) && (
+              <span className="text-sm text-destructive">
+                {saveError || `Unable to load settings from the database: ${settingsError}`}
+              </span>
+            )}
           </div>
         </form>
       </Card>

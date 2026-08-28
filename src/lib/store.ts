@@ -7,7 +7,7 @@ export type Payment = {
   amount: number;
   date: string; // yyyy-mm-dd
   mode: "Cash" | "UPI" | "Bank Transfer";
-  upiReference?: string;
+  upiReference?: string | undefined;
   nextDueDate: string;
   remainingAfter: number;
   previouslyPaid: number;
@@ -345,7 +345,7 @@ export function addPayment(input: {
   date: string;
   mode: Payment["mode"];
   nextDueDate: string;
-  upiReference?: string;
+  upiReference?: string | undefined;
 }): Payment {
   const students = getStudents();
 
@@ -451,9 +451,14 @@ function recalculateStudentPayments(studentId: string) {
 
 export function updatePayment(input: Payment): Payment {
   const payments = getPayments();
+  // const idx = payments.findIndex((p) => p.id === input.id);
+  // if (idx < 0) throw new Error("Payment not found");
+  // const oldStudentId = payments[idx].studentId;
   const idx = payments.findIndex((p) => p.id === input.id);
-  if (idx < 0) throw new Error("Payment not found");
-  const oldStudentId = payments[idx].studentId;
+if (idx < 0) throw new Error("Payment not found");
+const existing = payments[idx];
+if (!existing) throw new Error("Payment not found");
+const oldStudentId = existing.studentId;
   payments[idx] = { ...input, amount: Number(input.amount) || 0 };
   write(KEYS.payments, payments);
   recalculateStudentPayments(oldStudentId);

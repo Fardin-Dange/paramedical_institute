@@ -4,7 +4,8 @@ import { AlertTriangle, CalendarClock, CalendarDays, IndianRupee, Pencil, Plus, 
 import { AppLayout } from "@/components/AppLayout";
 import { Btn, Card, Field, Input, Modal, Select, StatCard, StatusBadge } from "@/components/ui-kit";
 import { useAppData } from "@/lib/useAppData";
-import { deleteExpense, dueStatus, formatDate, formatINR, getExpenses, remainingOf, saveExpense, type Expense, type Student } from "@/lib/store";
+import { addExpenseFn, deleteExpenseFn, updateExpenseFn } from "@/lib/expenses";
+import { dueStatus, formatDate, formatINR, remainingOf, type Expense, type Student } from "@/lib/store";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -49,8 +50,7 @@ function ReminderList({ title, students, tone }: { title: string; students: Stud
 }
 
 function Dashboard() {
-  const { students, refresh } = useAppData();
-  const expenses = getExpenses();
+  const { students, expenses, expensesError, refresh } = useAppData();
   const [expenseForm, setExpenseForm] = useState<Expense | null>(null);
 
   const totalFees = students.reduce((a, s) => a + s.totalFee, 0);
@@ -85,7 +85,7 @@ function Dashboard() {
         </div>
       )}
 
-      <Card className="mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold">Institute Expenses</h2><p className="text-sm text-muted-foreground">Total: {formatINR(totalExpenses)}</p></div><Btn onClick={()=>setExpenseForm({id:"E"+Date.now(),title:"",amount:0,date:new Date().toISOString().slice(0,10),category:"Other",note:""})}><Plus className="h-4 w-4"/> Add Expense</Btn></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[650px] text-sm"><thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground"><th className="px-3 py-2">Expense</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2"></th></tr></thead><tbody>{expenses.length===0?<tr><td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">No institute expenses added yet.</td></tr>:expenses.map(e=><tr key={e.id} className="border-b border-border last:border-0"><td className="px-3 py-2"><p className="font-medium">{e.title}</p><p className="text-xs text-muted-foreground">{e.note}</p></td><td className="px-3 py-2">{formatDate(e.date)}</td><td className="px-3 py-2">{e.category}</td><td className="px-3 py-2 font-medium">{formatINR(e.amount)}</td><td className="px-3 py-2 text-right"><button onClick={()=>setExpenseForm(e)} className="rounded-lg p-2 text-primary hover:bg-primary/10"><Pencil className="h-4 w-4"/></button><button onClick={()=>{if(confirm(`Delete expense ${e.title}?`)){deleteExpense(e.id);refresh()}}} className="rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4"/></button></td></tr>)}</tbody></table></div></Card>
+      <Card className="mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-semibold">Institute Expenses</h2><p className="text-sm text-muted-foreground">Total: {formatINR(totalExpenses)}</p></div><Btn onClick={()=>setExpenseForm({id:"E"+Date.now(),title:"",amount:0,date:new Date().toISOString().slice(0,10),category:"Other",note:""})}><Plus className="h-4 w-4"/> Add Expense</Btn></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[650px] text-sm"><thead><tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground"><th className="px-3 py-2">Expense</th><th className="px-3 py-2">Date</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Amount</th><th className="px-3 py-2"></th></tr></thead><tbody>{expenses.length===0?<tr><td colSpan={5} className="px-3 py-4 text-sm text-muted-foreground">No institute expenses added yet.</td></tr>:expenses.map(e=><tr key={e.id} className="border-b border-border last:border-0"><td className="px-3 py-2"><p className="font-medium">{e.title}</p><p className="text-xs text-muted-foreground">{e.note}</p></td><td className="px-3 py-2">{formatDate(e.date)}</td><td className="px-3 py-2">{e.category}</td><td className="px-3 py-2 font-medium">{formatINR(e.amount)}</td><td className="px-3 py-2 text-right"><button onClick={()=>setExpenseForm(e)} className="rounded-lg p-2 text-primary hover:bg-primary/10"><Pencil className="h-4 w-4"/></button><button onClick={async()=>{if(confirm(`Delete expense ${e.title}?`)){try{await deleteExpenseFn({data:e.id});await refresh()}catch(error){console.error("Failed to delete expense:",error);alert(error instanceof Error?error.message:"Failed to delete expense.")}}}} className="rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4"/></button></td></tr>)}</tbody></table></div>{expensesError&&<p className="mt-3 text-sm text-destructive">Unable to load expenses from the database: {expensesError}</p>}</Card>
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-base font-semibold text-foreground">🔔 Fee Reminders</h2>
@@ -99,12 +99,13 @@ function Dashboard() {
         <ReminderList title="Upcoming (next 7 days)" students={upcoming.filter((s) => s.nextDueDate <= new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10))} tone="text-primary" />
         <ReminderList title="Overdue" students={overdue} tone="text-destructive" />
       </div>
-      {expenseForm&&<ExpenseForm expense={expenseForm} onClose={()=>setExpenseForm(null)} onSaved={()=>{setExpenseForm(null);refresh()}}/>}
+      {expenseForm&&<ExpenseForm expense={expenseForm} onClose={()=>setExpenseForm(null)} onSaved={async()=>{await refresh();setExpenseForm(null)}}/>}
     </AppLayout>
   );
 }
 
-function ExpenseForm({expense,onClose,onSaved}:{expense:Expense;onClose:()=>void;onSaved:()=>void}) {
+function ExpenseForm({expense,onClose,onSaved}:{expense:Expense;onClose:()=>void;onSaved:()=>Promise<void>}) {
   const [f,setF]=useState(expense);
-  return <Modal title={expense.title?"Edit Institute Expense":"Add Institute Expense"} onClose={onClose}><form className="space-y-4" onSubmit={e=>{e.preventDefault();if(!f.title.trim()||Number(f.amount)<0)return;saveExpense({...f,title:f.title.trim(),amount:Number(f.amount)||0});onSaved()}}><div className="grid gap-4 sm:grid-cols-2"><Field label="Expense Title / Name"><Input required value={f.title} onChange={e=>setF({...f,title:e.target.value})}/></Field><Field label="Amount (₹)"><Input type="number" min={0} required value={f.amount} onChange={e=>setF({...f,amount:Number(e.target.value)})}/></Field><Field label="Expense Date"><Input type="date" required value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></Field><Field label="Category"><Select value={f.category} onChange={e=>setF({...f,category:e.target.value})}><option>Utilities</option><option>Salary</option><option>Rent</option><option>Supplies</option><option>Marketing</option><option>Travel</option><option>Other</option></Select></Field><Field label="Description / Note (optional)"><Input value={f.note} onChange={e=>setF({...f,note:e.target.value})}/></Field></div><div className="flex justify-end gap-2"><Btn type="button" variant="outline" onClick={onClose}>Cancel</Btn><Btn type="submit">Save Expense</Btn></div></form></Modal>;
+  const isNew = !expense.title;
+  return <Modal title={isNew?"Add Institute Expense":"Edit Institute Expense"} onClose={onClose}><form className="space-y-4" onSubmit={async e=>{e.preventDefault();if(!f.title.trim()||Number(f.amount)<0)return;try{if(isNew){await addExpenseFn({data:{title:f.title.trim(),amount:Number(f.amount)||0,date:f.date,category:f.category,note:f.note}})}else{await updateExpenseFn({data:{...f,title:f.title.trim(),amount:Number(f.amount)||0}})}await onSaved()}catch(error){console.error("Failed to save expense:",error);alert(error instanceof Error?error.message:"Failed to save expense.")}}}><div className="grid gap-4 sm:grid-cols-2"><Field label="Expense Title / Name"><Input required value={f.title} onChange={e=>setF({...f,title:e.target.value})}/></Field><Field label="Amount (₹)"><Input type="number" min={0} required value={f.amount} onChange={e=>setF({...f,amount:Number(e.target.value)})}/></Field><Field label="Expense Date"><Input type="date" required value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></Field><Field label="Category"><Select value={f.category} onChange={e=>setF({...f,category:e.target.value})}><option>Utilities</option><option>Salary</option><option>Rent</option><option>Supplies</option><option>Marketing</option><option>Travel</option><option>Other</option></Select></Field><Field label="Description / Note (optional)"><Input value={f.note} onChange={e=>setF({...f,note:e.target.value})}/></Field></div><div className="flex justify-end gap-2"><Btn type="button" variant="outline" onClick={onClose}>Cancel</Btn><Btn type="submit">Save Expense</Btn></div></form></Modal>;
 }

@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
-import { formatDate, getSettings, type Payment, type Student } from "./store";
+import { formatDate, type Payment, type Settings, type Student } from "./store";
+import { getSettingsFn } from "./settings";
 import logoAsset from "@/assets/logo.png.asset.json";
 
 const rs = (n: number) => "Rs. " + (Number(n) || 0).toLocaleString("en-IN");
@@ -23,8 +24,11 @@ async function loadDefaultLogo() {
   return defaultLogoData;
 }
 
-export function buildReceiptDoc(student: Student, payment: Payment) {
-  const s = getSettings();
+export function buildReceiptDoc(
+  student: Student,
+  payment: Payment,
+  s: Settings,
+) {
   const logo = s.logo || defaultLogoData;
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
   const W = doc.internal.pageSize.getWidth();
@@ -97,12 +101,14 @@ export function buildReceiptDoc(student: Student, payment: Payment) {
 
 export async function downloadReceipt(student: Student, payment: Payment) {
   await loadDefaultLogo();
-  buildReceiptDoc(student, payment).save(`${payment.receiptNo}-${student.name}.pdf`);
+  const settings = await getSettingsFn();
+  buildReceiptDoc(student, payment, settings).save(`${payment.receiptNo}-${student.name}.pdf`);
 }
 
 export async function printReceipt(student: Student, payment: Payment) {
   await loadDefaultLogo();
-  const doc = buildReceiptDoc(student, payment);
+  const settings = await getSettingsFn();
+  const doc = buildReceiptDoc(student, payment, settings);
   const url = doc.output("bloburl");
   const w = window.open(url as unknown as string, "_blank");
   if (w) w.focus();
